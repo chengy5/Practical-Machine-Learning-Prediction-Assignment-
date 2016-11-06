@@ -1,0 +1,143 @@
+---
+title: "Practical Machine Learning: Prediction Assignment"
+author: "Yun Cheng"
+date: "November 6, 2016"
+output: html_document
+---
+###Instructions  
+One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants.
+
+###What You Should Submit
+The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you made the choices you did. You will also use your prediction model to predict 20 different test cases.
+
+###Load Data
+```{r,results='hide', cache=FALSE, message=FALSE, warning=FALSE}
+library(data.table)
+library(caret)
+library(rattle)
+library(rpart)
+library(rpart.plot)
+library(randomForest)
+library(klaR)
+library(gbm)
+
+training.data <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv")
+predict.data <- read.csv("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv")
+```
+
+###Remove Redundant Features
+```{r, cache=FALSE, message=FALSE, warning=FALSE}
+#remove variables with Nearly Zero Variance
+NZV <- nearZeroVar(training.data)
+training.1 <- training.data[, -NZV]
+predict.1 <- predict.data[, -NZV]
+```
+
+```{r, cache=FALSE, message=FALSE, warning=FALSE}
+#remove variables that are mostly NA
+ALLNA <- sapply(training.1, function(x) mean(is.na(x))) > 0.95
+training.2 <- training.1[, ALLNA==FALSE]
+predict.2 <- predict.1[, ALLNA==FALSE]
+```
+
+```{r, cache=FALSE, message=FALSE, warning=FALSE}
+#remove identification only variables (columns 1 to 5)
+training.3 <- training.2[, -(1:5)]
+predict.3 <- predict.2[, -(1:5)]
+```
+
+###Create Training And Test Datasets
+```{r, cache=FALSE, message=FALSE, warning=FALSE}
+#select random sample to build as traing and test data (to shorten time consuming)
+set.seed(2000)
+training.s <- data.frame(data.table(training.3)[sample(.N,1000)])
+
+#create training and test datasets
+inTrain <- createDataPartition(y=training.s$classe,p=0.7,list=FALSE)
+training <- training.s[inTrain,]
+test <- training.s[-inTrain,]
+dim(training); dim(test)
+```
+
+###Machine Learning Classifier
+####a. Decision Tree
+```{r, cache=FALSE, message=FALSE, warning=FALSE}
+#decision tree model
+modfit.1 <- rpart(classe ~., method="class", data = training)
+fancyRpartPlot(modfit.1)
+```
+
+```{r, cache=FALSE, message=FALSE, warning=FALSE}
+#decision tree model prediction
+predict.1 <- predict(modfit.1, newdata=test, type="class")
+confusion.1 <- confusionMatrix(predict.1, test$classe)
+confusion.1
+```
+
+####b. Random Forests
+```{r, cache=FALSE, message=FALSE, warning=FALSE}
+#random forests model
+modfit.2 <- train(classe ~ ., data = training, method="rf", Prox=TRUE)
+modfit.2$finalModel
+```
+
+```{r, cache=FALSE, message=FALSE, warning=FALSE}
+#random forests model prediction
+predict.2 <- predict(modfit.2$finalModel, newdata=test, type="class")
+confusion.2 <- confusionMatrix(predict.2, test$classe)
+confusion.2
+```
+
+####c. Boosting
+```{r, cache=FALSE, message=FALSE, warning=FALSE}
+#boosting model
+modfit.3 <- train(classe ~ ., data = training, method="gbm", verbose=FALSE)
+```
+
+```{r, cache=FALSE, message=FALSE, warning=FALSE}
+#boosting model prediction
+predict.3 <- predict(modfit.3, newdata=test)
+confusion.3 <- confusionMatrix(predict.3, test$classe)
+confusion.3
+```
+
+####d. Linear Discriminant Analysis
+```{r, cache=FALSE, message=FALSE, warning=FALSE}
+#linear discriminant analysis model
+modfit.4 <- train(classe ~ ., data=training, method="lda")
+```
+
+```{r, cache=FALSE, message=FALSE, warning=FALSE}
+#linear discriminant analysis model prediction
+predict.4 <- predict(modfit.4, newdata=test)
+confusion.4 <- confusionMatrix(predict.4, test$classe)
+confusion.4
+```
+
+####e. Naive Bayes 
+```{r, cache=FALSE, message=FALSE, warning=FALSE}
+#naive bayes model
+modfit.5 <- train(classe ~ ., data = training, method="nb")
+```
+
+```{r, cache=FALSE, message=FALSE, warning=FALSE}
+#naive bayes model prediction
+predict.5 <- predict(modfit.5, newdata=test)
+confusion.5 <- confusionMatrix(predict.5, test$classe)
+confusion.5
+```
+
+###Compare Model Accuracy
+- decision tree: 0.6498
+- random forests: 0.8855
+- boosting: 0.8721
+- linear discriminant analysis: 0.6498
+- naive bayes: 0.6364
+Select random forests model to predict test dataset
+
+###Apply The Selected Model to predict test dataset
+```{r, cache=FALSE, message=FALSE, warning=FALSE}
+#select random forests model to predict test dataset
+Predict <- predict(modfit.2, newdata=predict.data)
+Predict
+```
